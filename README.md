@@ -25,4 +25,7 @@ Coloca en el navegador: http://localhost:8000
 deberias ver un mensaje como este:
 {"message":"Welcome to the FastAPI Game API"}
 
+### **5. enpoints**
+http://localhost:8000/docs
+
 
