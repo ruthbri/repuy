@@ -1,4 +1,4 @@
-# repuy API
+# Tepuy API
 
 Tepuy API es una aplicación desarrollada con **FastAPI** y **MongoDB** para gestionar un sistema de juego con salas, jugadores y tiles.
 
