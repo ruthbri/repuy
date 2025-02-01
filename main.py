@@ -1,6 +1,16 @@
 from fastapi import FastAPI, HTTPException
 from pymongo import MongoClient
 from bson import ObjectId
+from pydantic import BaseModel
+
+class Player(BaseModel):
+    name: str
+
+class JoinRoomRequest(BaseModel):
+    player_id: str
+    room_id: str
+class StartGameRequest(BaseModel):
+    room_id: str    
 
 app = FastAPI()
 
@@ -40,31 +50,83 @@ def get_room(room_id: str):
     return room
 
 @app.post("/join-room")
-def join_room(player_id: str, room_id: str):
+def join_room(request: JoinRoomRequest):
+    # Validar el formato del player_id y room_id (asegurarse de que son ObjectId válidos)
+    try:
+        player_id = request.player_id
+        room_id = request.room_id
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid player_id or room_id format")
+    
+    # Buscar el jugador en la base de datos
     player = players_collection.find_one({"_id": player_id})
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
-    games_collection.update_one({"room": room_id}, {"$addToSet": {"players": player_id}})
-    return {"message": "Player joined room", "room_id": room_id, "player_id": player_id}
 
-@app.post("/start-game")
-def start_game(room_id: str):
+    # Buscar la sala en la base de datos
     room = rooms_collection.find_one({"_id": room_id})
     if not room:
-        return {"error": "Room not found"}, 404
-    if room["status"] != "waiting":
-        return {"error": "Room is not in a valid state to start a game"}, 400
+        raise HTTPException(status_code=404, detail="Room not found")
 
+    # Agregar el jugador a la sala
+    rooms_collection.update_one(
+        {"_id": room_id}, 
+        {"$addToSet": {"players": player_id}}
+    )
+
+    return {"message": "Player joined room", "room_id": str(room_id), "player_id": str(player_id)}
+
+
+@app.post("/create-player")
+def create_player(player: Player):
+    # Crear un nuevo jugador
+    new_player = {
+        "_id": str(ObjectId()),
+        "name": player.name,  # Registrar la fecha de creación
+        "current_game_code": ""
+
+    }
+    print(new_player)
+    players_collection.insert_one(new_player)
+    return {"message": "Player created", "player": serialize_id(new_player)}
+
+@app.post("/start-game")
+def start_game(request: StartGameRequest):
+    print("Request recibido:", request)
+    room_id = request.room_id
+    print(room_id)
+    # Verificar si la sala existe
+    room = rooms_collection.find_one({"_id": room_id})
+    print(room)
+    if not room:
+        raise HTTPException(status_code=404, detail=f"Room with ID {room_id} not found.")
+
+    # Verificar el estado de la sala
+    if room.get("status") != "waiting":
+        raise HTTPException(status_code=400, detail="Room is not in a valid state to start a game.")
+
+    # Crear una nueva partida
     new_game = {
         "_id": str(ObjectId()),  # ID único de la partida
-        "players": room["players"],
-        "tiles": [],
-        "room_id": room_id
+        "players": room.get("players", []),
+        "tiles": [],  # Aquí puedes inicializar las fichas si es necesario
+        "room": room_id,
     }
+    print(new_game)
     games_collection.insert_one(new_game)
+    print("Game inserted")
     # Actualizar el estado de la sala
-    rooms_collection.update_one({"_id": room_id}, {"$set": {"status": "active"}})
-    return {"message": "Game started", "game_id": new_game["_id"]}
+    rooms_collection.update_one(
+        {"_id": room_id},
+        {"$set": {"status": "in_progress"}}
+    )
+    print("Room updated")
+    return {
+        "message": "Game started successfully",
+        "game_id": new_game["_id"],
+        "room_id": room_id,
+        "players": new_game["players"]
+    }
 
 @app.get("/get-game/{game_id}")
 def get_game(game_id: str):
