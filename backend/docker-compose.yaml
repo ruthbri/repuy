@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  mongodb:
+    container_name: mongodb_tepuy
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - custom_network
+
+  fastapi:
+    build:
+      context: .
+    container_name: fastapi-game
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+    networks:
+      - custom_network
+
+networks:
+  custom_network:
+    driver: bridge
+
+
